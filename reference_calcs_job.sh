@@ -1,0 +1,1 @@
+gcloud pubsub topics publish ftrcalcsteststandard-job --message '{ "type": "calcs", "client_name": "dicks", "jobs": ["update_summary", "weekly_calcs"] }'

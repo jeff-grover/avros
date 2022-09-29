@@ -1,0 +1,6 @@
+requests
+avro
+fastavro
+click
+deepdiff
+google-cloud-storage
