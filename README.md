@@ -60,18 +60,27 @@ Commands:
   compare-clients
   diff-avros
   dump-avro
+  list-avros
   list-clients
+  list-tests
   
 ```
 The `calvro list-clients` utility allows you to list the various feature environment clients available.  It is essentially equivalent to this command:
 ```bash
 gsutil ls gs://md_stag_graphdata/
 ```
-The `calvro dump-avro client filename` command will print the contents of the specified avro filename for the given client (as JSON).  This may be redirected to a file and referenced later, for example.
+`calvro dump-avro client filename` will print the contents of the specified avro filename for the given client (as JSON).  This may be redirected to a file and referenced later, for example.
 
-The `calvro compare-clients reference changed` tool compares the avro filenames contained in the two buckets, and shows if they are identical or if files were new or missing in one or the other environment.
+`calvro compare-clients reference changed` compares the avro filenames contained in the two buckets, and shows if they are identical or if files were new or missing in one or the other environment.
 
-The `calvro diff-avros reference changed filename` option will compare a *single* avro filenames contained in the storage buckets for both clients, and shows if they are identical or if items were new or missing in that single avro file.
+`calvro diff-avros reference changed filename` will compare a *single* avro filenames contained in the storage buckets for both clients, and shows if they are identical or if items were new or missing in that single avro file.
+
+`calvro list-clients`  will show the potential feature environments and client data which can be used as arguments in other commands or regression testing.
+
+`calvro list-avros client` will show a list and categorized totals for all the .avro files for the given client
+
+`calvro list-tests client` will show a list of the tests and how many .avro files are included in each test for the given client
+
 
 
 #### regression
