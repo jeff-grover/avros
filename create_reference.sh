@@ -1,1 +1,1 @@
-gcloud pubsub topics publish ftr-env-manager --message '{"job": "recreate", "params": {"branch": "ftr-calcs-test-standard", "client_list": "dicks", "pusher": "Jeff"}}' --project md-build
+gcloud pubsub topics publish ftr-env-manager --message '{"job": "recreate", "params": {"branch": "ftr-calcs-test-standard", "client_list": "dicks,potbelly", "pusher": "Jeff"}}' --project md-build

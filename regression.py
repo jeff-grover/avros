@@ -5,7 +5,7 @@ import subprocess
 import shutil
 
 from multiprocessing import Process
-from deepdiff import DeepDiff
+from diff import compare
 from avro.datafile import DataFileReader
 from avro.io import DatumReader
 from pathlib import Path
@@ -43,7 +43,7 @@ def get_client_test_avros(client, test_id=""):
     test_urls = run_subprocess(cmd)
     count = 0
     for avro in test_urls:
-        avro_file = avro.replace(client_url, '').strip()
+        avro_file = avro.replace(f"{GCP_BUCKET_LOCATION}{client}/", '').strip()
         if DEBUG:
             print(avro_file, file=sys.stderr)
         else:
@@ -69,7 +69,7 @@ def get_client_test_avros(client, test_id=""):
 def compare_clients(client1, client2, test_id):
     test_avros1 = get_client_test_avros(client1, test_id)
     test_avros2 = get_client_test_avros(client2, test_id)
-    diff = DeepDiff(test_avros1, test_avros2, ignore_order=True)
+    diff = compare(test_avros1, test_avros2)
 
     # Type-safe developers, avert your gaze from the following lines:
     if len(diff.to_dict().items()) == 0:
@@ -134,7 +134,7 @@ def deep_difference_avro(avro, ref_file, test_file):
     COMPARISONS += 1
     ref_avro = read_avro_from_disk(ref_file)
     test_avro = read_avro_from_disk(test_file)
-    compare_result = DeepDiff(ref_avro, test_avro)
+    compare_result = compare(ref_avro, test_avro)
     if len(compare_result.to_dict().items()) == 0:
         if DEBUG:
             print(f"  {avro} is IDENTICAL", file=sys.stderr)
@@ -149,7 +149,7 @@ def deep_difference_avro(avro, ref_file, test_file):
 def regression_test(reference_client, changed_client, test_id=""):
     print(f"\nComparing avros from \"{changed_client}\" to reference avros in \"{reference_client}\":", file=sys.stderr)
     compare_result = compare_clients(reference_client, changed_client, test_id)
-    if type(compare_result) == DeepDiff:
+    if type(compare_result) != dict:
         print(compare_result.to_json(indent=2))
         print('\nAVRO FILENAMES ARE NOT IDENTICAL', file=sys.stderr)
         exit(1)

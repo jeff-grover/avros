@@ -7,11 +7,14 @@ import json
 import tempfile
 from avro.datafile import DataFileReader
 from avro.io import DatumReader
-from deepdiff import DeepDiff
+from diff import compare
 
 # from google.cloud import gstorage
 # https://console.cloud.google.com/iam-admin/serviceaccounts/details/101272715562618766186?project=md-stag-16&supportedpurview=project
 # TODO:  Consider using gstorage = storage.Client()
+
+# TODO:  MetricDisplayData.json needs to be automatically refereshed from here:
+#   https://github.com/marketdial/metric-config-service/blob/main/MetricDisplayData.json
 
 GCP_BUCKET_LOCATION = "gs://md_stag_graphdata/"
 
@@ -133,7 +136,7 @@ def list_tests(client):
 def compare_clients(client1, client2):
     test_avros1 = get_client_test_avros(client1)
     test_avros2 = get_client_test_avros(client2)
-    diff = DeepDiff(test_avros1, test_avros2, ignore_order=True)
+    diff = compare(test_avros1, test_avros2)
     if len(diff.to_dict().items()) == 0:
         click.echo("IDENTICAL")
         return test_avros1
@@ -156,14 +159,21 @@ def dump_avro(client, avro_file):
     with tempfile.TemporaryDirectory() as tempdir:
         client_url = f"gs://md_stag_graphdata/{client}/{avro_file}"
         print(f"Writing {client_url} to: {tempdir}", file=sys.stderr)
-        results = subprocess.run(['gsutil cp', client_url, tempdir], capture_output=True, shell=True, text=True).stdout
+        results = subprocess.run(f'gsutil cp {client_url} {tempdir}', capture_output=True, shell=True, text=True).stdout
+
+        metric_data = {}
+        with open(f"MetricDisplayData.json", "r") as metric_file:
+            metric_data = json.load(metric_file)
+
+        rows = []
         with open(f"{tempdir}/{avro_file}", "rb") as fo:
-            avro_reader = DataFileReader(open(avro_file, "rb"), DatumReader())
-            rows = []
+            avro_reader = DataFileReader(fo, DatumReader())
             for record in avro_reader:
-                rows.append(record)
-            print(json.dumps(rows, indent=2))
-            print(f'Dumped {len(rows)} records', file=sys.stderr)
+                add_name = {'name': metric_data[str(record['uuid'])]['displayName']} | record
+                rows.append(add_name)
+
+        print(json.dumps(rows, indent=2))
+        print(f'Dumped {len(rows)} records', file=sys.stderr)
 
 
 @click.command()
@@ -174,7 +184,7 @@ def diff_avros(avro1, avro2):
         with open(avro2) as file2:
             rows1 = json.load(file1)
             rows2 = json.load(file2)
-            diff = DeepDiff(rows1, rows2, ignore_order=True)
+            diff = compare(rows1, rows2)
             click.echo(diff.to_json(indent=2))
 
 

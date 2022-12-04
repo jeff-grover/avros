@@ -8,7 +8,7 @@ The intended users of this code are calcs team developers, data scientists and t
 ### Setup
 All the code in this repository is in Python.  You can either clone (if you want to make changes) or just download this repository as a .zip file and extract it to a project directory.  Then`cd` to that directory.
 
-To set up your python/pyenv environment, see the first part confluence page (the Poetry steps do not apply for this project):
+To set up your python/pyenv environment, see the first part of this confluence page (the Poetry steps do not apply for this project):
 
 https://marketdial.atlassian.net/wiki/spaces/ENG/pages/1342930945/Poetry+Black+Setup
 
