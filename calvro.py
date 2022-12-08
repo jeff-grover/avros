@@ -13,10 +13,69 @@ from diff import compare
 # https://console.cloud.google.com/iam-admin/serviceaccounts/details/101272715562618766186?project=md-stag-16&supportedpurview=project
 # TODO:  Consider using gstorage = storage.Client()
 
-# TODO:  MetricDisplayData.json needs to be automatically refereshed from here:
+# TODO:  MetricDisplayData.json needs to be automatically refreshed from here:
 #   https://github.com/marketdial/metric-config-service/blob/main/MetricDisplayData.json
 
 GCP_BUCKET_LOCATION = "gs://md_stag_graphdata/"
+
+
+class AvroCategorizer:
+    def __init__(self, location):
+        self.location = location
+        self.total_files = 0
+        self.total_cohort = 0
+        self.total_pair = 0
+        self.total_tag = 0
+        self.total_bias = 0
+        self.total_prediction = 0
+        self.total_lift = 0
+        self.total_customer = 0
+        self.total_overall = 0
+        self.other_types = []
+
+    def add_avro(self, filename):
+        if filename.endswith('.avro'):
+            self.total_files += 1
+            if 'COHORT-' in filename:
+                self.total_cohort += 1
+            elif 'PAIR-' in filename:
+                self.total_pair += 1
+            elif 'TAG-' in filename:
+                self.total_tag += 1
+            elif 'lift-manifest' in filename:
+                self.total_lift += 1
+            elif 'bias' in filename:
+                self.total_bias += 1
+            elif 'prediction-table' in filename:
+                self.total_prediction += 1
+            elif 'customer' in filename:
+                self.total_customer += 1
+            elif 'OVERALL' in filename:
+                self.total_overall += 1
+            else:
+                self.other_types.append(filename.split('.')[1])
+            # print(filename.replace(self.location, ''))
+        else:
+            self.other_types.append(filename)
+
+    def tally_result(self):
+        result = f'  {self.total_files} total avro files, including:'
+        result += f'\n  {self.total_pair} site pairs'
+        result += f'\n  {self.total_tag} tags'
+        result += f'\n  {self.total_cohort} cohorts'
+        result += f'\n  {self.total_lift} site/store pair lift manifests'
+        result += f'\n  {self.total_bias} bias manifests'
+        result += f'\n  {self.total_prediction} prediction tables'
+        result += f'\n  {self.total_customer} customer'
+        result += f'\n  {self.total_overall} overall'
+        result += '\n  And these other variations:'
+        if not self.other_types:
+            result += '\n    <NONE>'
+        else:
+            for variation in self.other_types:
+                result += f'\n    {variation}'
+
+        return result
 
 
 def get_client_test_avros(client):
@@ -24,7 +83,7 @@ def get_client_test_avros(client):
     client_url = f"{GCP_BUCKET_LOCATION}{client}/"
     test_urls = subprocess.run(f"gsutil ls -la {client_url}", capture_output=True, shell=True, text=True).stdout
     for avro in test_urls.splitlines(keepends=False):
-        if avro[0:avro.find(' 20')].strip() and avro.endswith('.avro') and not avro.startswith('TOTAL'):
+        if avro[0:avro.find('#')].endswith('.avro') and not avro.startswith('TOTAL'):
             avro_file = avro[avro.find('gs://'):avro.find('#')].replace(client_url, '')
             test_num = avro_file[0:avro_file.find('-')]
             if test_num not in test_avros:
@@ -43,91 +102,34 @@ def cli():
 def list_clients():
     client_urls = subprocess.run(f'gsutil ls {GCP_BUCKET_LOCATION}', capture_output=True, shell=True, text=True).stdout
     for client in client_urls.splitlines(keepends=False):
-        click.echo(client.replace(GCP_BUCKET_LOCATION, '')[0:-1])
+        print(client.replace(GCP_BUCKET_LOCATION, '')[0:-1])
 
 
 @click.command()
 @click.argument('client')
 def list_avros(client):
-    total_files = 0
-    total_cohort = 0
-    total_pair = 0
-    total_tag = 0
-    total_bias = 0
-    total_prediction = 0
-    total_lift = 0
-    total_customer = 0
-    total_overall = 0
-    other_types = []
     location = GCP_BUCKET_LOCATION + client + '/'
     client_urls = subprocess.run(f'gsutil ls {location}', capture_output=True, shell=True,
                                  text=True).stdout
+
+    categories = AvroCategorizer(location)
     for client in client_urls.splitlines(keepends=False):
-        if client.endswith('.avro'):
-            total_files += 1
-            if 'COHORT-' in client:
-                total_cohort += 1
-            elif 'PAIR-' in client:
-                total_pair += 1
-            elif 'TAG-' in client:
-                total_tag += 1
-            elif 'lift-manifest' in client:
-                total_lift += 1
-            elif 'bias' in client:
-                total_bias += 1
-            elif 'prediction-table' in client:
-                total_prediction += 1
-            elif 'customer' in client:
-                total_customer += 1
-            elif 'OVERALL' in client:
-                total_overall += 1
-            else:
-                other_types.append(client.split('.')[1])
-            click.echo(client.replace(location, ''))
-        else:
-            other_types.append(client)
+        categories.add_avro(client)
 
-
-    click.echo(f'\n{total_files} total avro files, including:')
-    click.echo(f'  {total_pair} site pairs')
-    click.echo(f'  {total_tag} tags')
-    click.echo(f'  {total_cohort} cohorts')
-    click.echo(f'  {total_lift} site/store pair lift manifests')
-    click.echo(f'  {total_bias} bias manifests')
-    click.echo(f'  {total_prediction} prediction tables')
-    click.echo(f'  {total_customer} customer')
-    click.echo(f'  {total_overall} overall')
-    click.echo('  And these other variations:')
-    if not other_types:
-        click.echo('    <NONE>')
-    else:
-        for variation in other_types:
-            print(f'    {variation}')
-
-    # TODO:  THIS IMPLEMENTATION HAS PROBLEMS:
-    # Execution took: 1069.295246403, no results printed see:
-    #   https://codeutility.org/python-how-to-get-list-of-folders-in-a-given-bucket-using-google-cloud-api-stack-overflow/
-    # start = time.perf_counter()
-    # blobs = gsc.list_blobs(GCP_BUCKET_NAME)
-    # count = 1
-    # for blob in blobs:
-    #     if not count % 100:
-    #         print(count)
-    #     if blob.name.endswith("/"):
-    #         click.echo(blob.name)
-    # time_elapsed = time.perf_counter() - start
-    # print(f"\n\nExecution took: {time_elapsed}\n\n", file=sys.stderr)
+    print(categories.tally_result(), file=sys.stderr)
 
 
 @click.command()
 @click.argument('client')
 def list_tests(client):
     test_avros = get_client_test_avros(client)
-
+    print(f'\n{client} has the following {len(test_avros)} tests:')
     for test, avros in test_avros.items():
-        click.echo(f"Test {test} has {len(avros)} avros.")
+        # print(f"Test {test} has {len(avros)} avros.")
+        categories = AvroCategorizer(client)
         for avro in avros:
-            click.echo(avro)
+            categories.add_avro(avro)
+        print(f'\nTest {test}: {categories.tally_result()}')
 
 
 @click.command()
@@ -149,12 +151,6 @@ def compare_clients(client1, client2):
 @click.argument('client')
 @click.argument('avro_file')
 def dump_avro(client, avro_file):
-    # TODO:  THIS IMPLEMENTATION HAS PROBLEMS:
-    # path = f"md_stag_graphdata/{client}"
-    # bucket = gstorage.bucket(path)
-    # blob = bucket.blob(avro_file)
-    # contents = blob.download_as_string()
-    # print(contents)
 
     with tempfile.TemporaryDirectory() as tempdir:
         client_url = f"gs://md_stag_graphdata/{client}/{avro_file}"
