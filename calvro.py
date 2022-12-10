@@ -88,9 +88,30 @@ def get_client_test_avros(client):
             test_num = avro_file[0:avro_file.find('-')]
             if test_num not in test_avros:
                 test_avros[test_num] = [avro_file]
+                print(f'Test {test_num}', file=sys.stderr)
             else:
                 test_avros[test_num].append(avro_file)
     return test_avros
+
+
+def get_avro_contents(client, avro_file):
+    with tempfile.TemporaryDirectory() as tempdir:
+        client_url = f"gs://md_stag_graphdata/{client}/{avro_file}"
+        print(f"Writing {client_url} to: {tempdir}", file=sys.stderr)
+        results = subprocess.run(f'gsutil cp {client_url} {tempdir}', capture_output=True, shell=True, text=True).stdout
+
+        metric_data = {}
+        with open(f"MetricDisplayData.json", "r") as metric_file:
+            metric_data = json.load(metric_file)
+
+        rows = []
+        with open(f"{tempdir}/{avro_file}", "rb") as fo:
+            avro_reader = DataFileReader(fo, DatumReader())
+            for record in avro_reader:
+                add_name = {'name': metric_data[str(record['uuid'])]['displayName']} | record
+                rows.append(add_name)
+
+        return rows
 
 
 @click.group()
@@ -133,6 +154,29 @@ def list_tests(client):
 
 
 @click.command()
+@click.argument('client')
+def list_metrics(client):
+    overall_metrics = {}
+    print(f'Getting test avros...', file=sys.stderr)
+    test_avros = get_client_test_avros(client)
+    print(f'\nProcessing {len(test_avros)} tests for {client} :', file=sys.stderr)
+    for test, avros in test_avros.items():
+        print(f'Test {test}', file=sys.stderr)
+        for avro in avros:
+            if 'OVERALL' in avro:
+                rows = get_avro_contents(client, avro)
+                for row in rows:
+                    metric = f'{row["name"]} ({row["uuid"]})'
+                    if metric in overall_metrics:
+                        if test not in overall_metrics[metric]:
+                            overall_metrics[metric].append(test)
+                    else:
+                        overall_metrics[metric] = []
+
+    print(f'\nAll {len(overall_metrics)} metrics used by client {client}: \n{json.dumps(overall_metrics, indent=2)}')
+
+
+@click.command()
 @click.argument('client1')
 @click.argument('client2')
 def compare_clients(client1, client2):
@@ -151,25 +195,9 @@ def compare_clients(client1, client2):
 @click.argument('client')
 @click.argument('avro_file')
 def dump_avro(client, avro_file):
-
-    with tempfile.TemporaryDirectory() as tempdir:
-        client_url = f"gs://md_stag_graphdata/{client}/{avro_file}"
-        print(f"Writing {client_url} to: {tempdir}", file=sys.stderr)
-        results = subprocess.run(f'gsutil cp {client_url} {tempdir}', capture_output=True, shell=True, text=True).stdout
-
-        metric_data = {}
-        with open(f"MetricDisplayData.json", "r") as metric_file:
-            metric_data = json.load(metric_file)
-
-        rows = []
-        with open(f"{tempdir}/{avro_file}", "rb") as fo:
-            avro_reader = DataFileReader(fo, DatumReader())
-            for record in avro_reader:
-                add_name = {'name': metric_data[str(record['uuid'])]['displayName']} | record
-                rows.append(add_name)
-
-        print(json.dumps(rows, indent=2))
-        print(f'Dumped {len(rows)} records', file=sys.stderr)
+    rows = get_avro_contents(client, avro_file)
+    print(json.dumps(rows, indent=2))
+    print(f'Dumped {len(rows)} records', file=sys.stderr)
 
 
 @click.command()
@@ -186,6 +214,7 @@ def diff_avros(avro1, avro2):
 
 cli.add_command(list_clients)
 cli.add_command(list_avros)
+cli.add_command(list_metrics)
 cli.add_command(list_tests)
 cli.add_command(compare_clients)
 cli.add_command(dump_avro)
